@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>低轨卫星过境预报工具（基于 satellite.js）</title>
+  <style>
+    body { font-family: "Microsoft YaHei", sans-serif; margin: 20px; }
+    .input-group { margin: 10px 0; display: flex; align-items: center; gap: 10px; }
+    label { display: inline-block; width: 150px; text-align: right; }
+    input, button { padding: 5px; }
+    table { border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    .station-table { border-collapse: collapse; margin: 10px 0; }
+    .station-table th, .station-table td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+    .sort-btn { background: none; border: none; cursor: pointer; color: #0066cc; text-decoration: underline; font-size: 12px; }
+    .sort-btn:hover { color: #004499; }
+    .section { margin: 30px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+    .section-title { font-size: 18px; margin-bottom: 15px; }
+    .geo-station-table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0;
+    }
+    .geo-station-table th, .geo-station-table td {
+      border: 1px solid #ccc;
+      padding: 5px;
+      text-align: center;
+    }
+    .geo-station-table .header {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+    .geo-station-table .label {
+      font-weight: bold;
+    }
+    .el-threshold-warning {
+      color: #e67e22;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .filtered-row {
+      background-color: #ffebee;
+      opacity: 0.7;
+    }
+    .filter-note {
+      color: #e67e22;
+      font-weight: bold;
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <h2>🛰️ 低轨卫星过境预报工具（基于 satellite.js）</h2>
+
+  <!-- 第一部分：过境预报 -->
+  <div class="section">
+    <h3 class="section-title">📈 第一部分：未来7天过境预报</h3>
+    
+    <div class="input-group">
+      <label>TLE Line 1:</label>
+      <input id="tle1" type="text" size="80" value="1 51950U 22023E   25354.62739178  .00000031  00000+0  16468-3 0  9992
+">
+    </div>
+    <div class="input-group">
+      <label>TLE Line 2:</label>
+      <input id="tle2" type="text" size="80" value="2 51950  63.4633  60.0150 0143486 348.6271  11.1529 13.56245337197810">
+    </div>
+    <div class="input-group">
+      <label>当地时间：</label>
+      <input id="localTime" type="text" placeholder="YYYY/MM/DD HH:MM:SS">
+      <button onclick="resetToCurrentTime()" style="padding: 2px 5px; font-size: 12px;">🕒 重置为当前时间</button>
+    </div>
+    <div class="input-group">
+      <label>时区（UTC+X）：</label>
+      <input id="timezone" type="number" value="8">
+    </div>
+    <div class="input-group">
+      <label>仰角阈值 (°):</label>
+      <input id="elThreshold" type="number" min="0" max="90" step="0.1" value="15">
+      <span class="el-threshold-warning">（0-90度）</span>
+    </div>
+
+    <!-- 地球站经纬度表 -->
+    <div style="margin: 20px 0;">
+      <table class="geo-station-table">
+        <tr>
+          <th colspan="11" class="header">地球站经纬度表</th>
+        </tr>
+        <tr>
+          <td class="label">序号</td>
+          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td>
+        </tr>
+        <tr>
+          <td class="label">经度</td>
+          <td><input id="lon1" type="number" step="0.01" value="20"></td>
+          <td><input id="lon2" type="number" step="0.01" value="30"></td>
+          <td><input id="lon3" type="number" step="0.01" value="40"></td>
+          <td><input id="lon4" type="number" step="0.01" value="50"></td>
+          <td><input id="lon5" type="number" step="0.01" value="60"></td>
+          <td><input id="lon6" type="number" step="0.01" value="70"></td>
+          <td><input id="lon7" type="number" step="0.01" value="80"></td>
+          <td><input id="lon8" type="number" step="0.01" value="90"></td>
+          <td><input id="lon9" type="number" step="0.01" value="100"></td>
+          <td><input id="lon10" type="number" step="0.01" value="110"></td>
+        </tr>
+        <tr>
+          <td class="label">纬度</td>
+          <td><input id="lat1" type="number" step="0.01" value="5"></td>
+          <td><input id="lat2" type="number" step="0.01" value="10"></td>
+          <td><input id="lat3" type="number" step="0.01" value="15"></td>
+          <td><input id="lat4" type="number" step="0.01" value="20"></td>
+          <td><input id="lat5" type="number" step="0.01" value="25"></td>
+          <td><input id="lat6" type="number" step="0.01" value="30"></td>
+          <td><input id="lat7" type="number" step="0.01" value="35"></td>
+          <td><input id="lat8" type="number" step="0.01" value="40"></td>
+          <td><input id="lat9" type="number" step="0.01" value="45"></td>
+          <td><input id="lat10" type="number" step="0.01" value="50"></td>
+        </tr>
+      </table>
+    </div>
+
+    <button onclick="calculatePasses()">🚀 开始计算过境</button>
+    <button onclick="exportToCSV()">📥 导出过境表到 CSV</button>
+
+    <div id="passResult"></div>
+  </div>
+
+  <!-- 第二部分：卫星坐标与多普勒计算 -->
+  <div class="section">
+    <h3 class="section-title">📡 第二部分：过境卫星坐标与多普勒计算</h3>
+
+    <!-- 输入区域调整为一行 -->
+    <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0;">
+      <div>
+        <label>过境序号：</label>
+        <input id="selectedPassIndex" type="number" min="1" value="1" onchange="autoFillStation()" style="width: 60px;">
+      </div>
+      <div>
+        <label>地球站序号：</label>
+        <input id="selectedStationId" type="number" min="1" max="10" value="1" onchange="updateLonLat()" style="width: 60px;">
+      </div>
+      <div>
+        <label>地球站经度：</label>
+        <input id="selectedLon" type="number" step="0.01" value="40" style="width: 60px;">
+      </div>
+      <div>
+        <label>地球站纬度：</label>
+        <input id="selectedLat" type="number" step="0.01" value="15" style="width: 60px;">
+      </div>
+      <div>
+        <label>发射频率（MHz）：</label>
+        <input id="txFreq" type="number" step="0.1" value="145" style="width: 60px;">
+      </div>
+      <div>
+        <label>接收频率（MHz）：</label>
+        <input id="rxFreq" type="number" step="0.1" value="145" style="width: 60px;">
+      </div>
+      <div>
+        <button onclick="calculateDoppler()">🚀 开始计算卫星坐标与多普勒</button>
+      </div>
+      <div>
+        <button onclick="exportDopplerToCSV()">📥 导出过境表到 CSV</button>
+      </div>
+    </div>
+
+    <div id="dopplerResult"></div>
+  </div>
+
+  <pre id="debug" style="font-size:12px; color:#666; display:none;"></pre>
+
+  <!-- 引入 satellite.js -->
+  <script src="satellite.js"></script>
+  <script>
+    // ========== 新增代码开始 ==========
+    // 页面加载完成后设置当前时间
+    document.addEventListener('DOMContentLoaded', function() {
+      // 获取当前时间
+      const now = new Date();
+      
+      // 格式化为 "YYYY/MM/DD HH:mm:ss"
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      
+      const formattedTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+      
+      // 设置输入框的值
+      document.getElementById('localTime').value = formattedTime;
+      
+      // 保存初始加载时间
+      window.initialLoadTime = formattedTime;
+    });
+    
+    // 重置为当前时间的函数
+    function resetToCurrentTime() {
+      document.getElementById('localTime').value = window.initialLoadTime;
+    }
+    // ========== 新增代码结束 ==========
+    // 全局变量用于存储排序状态和过境数据
+    let sortColumn = null;
+    let sortDirection = 'asc';
+    let allPasses = [];
+    let satrec = null; // 全局卫星轨道对象
+    let currentElThreshold = 10; // 默认仰角阈值
+
+    // 自动填充地球站信息
+    function autoFillStation() {
+      const selectedPassIndex = parseInt(document.getElementById('selectedPassIndex').value) - 1;
+      if (selectedPassIndex >= 0 && selectedPassIndex < allPasses.length) {
+        const pass = allPasses[selectedPassIndex];
+        const stationId = pass.stationId;
+        document.getElementById('selectedStationId').value = stationId;
+
+        // 根据 stationId 填充经度和纬度
+        const lon = parseFloat(document.getElementById(`lon${stationId}`).value);
+        const lat = parseFloat(document.getElementById(`lat${stationId}`).value);
+        document.getElementById('selectedLon').value = lon;
+        document.getElementById('selectedLat').value = lat;
+      }
+    }
+
+    // 当地球站序号改变时，更新经度和纬度
+    function updateLonLat() {
+      const stationId = parseInt(document.getElementById('selectedStationId').value);
+      if (stationId >= 1 && stationId <= 10) {
+        const lon = parseFloat(document.getElementById(`lon${stationId}`).value);
+        const lat = parseFloat(document.getElementById(`lat${stationId}`).value);
+        document.getElementById('selectedLon').value = lon;
+        document.getElementById('selectedLat').value = lat;
+      }
+    }
+
+    // 第一部分：计算过境
+    function calculatePasses() {
+      try {
+        const tle1 = document.getElementById('tle1').value;
+        const tle2 = document.getElementById('tle2').value;
+        const localTimeStr = document.getElementById('localTime').value;
+        const timezone = parseFloat(document.getElementById('timezone').value);
+        currentElThreshold = parseFloat(document.getElementById('elThreshold').value);
+
+        // 验证仰角阈值
+        if (isNaN(currentElThreshold) || currentElThreshold < 0 || currentElThreshold > 90) {
+          throw new Error("仰角阈值必须在0到90度之间");
+        }
+
+        // 解析本地时间 → UTC
+        const localDate = new Date(localTimeStr.replace(/\//g, '-'));
+        if (isNaN(localDate)) throw new Error("时间格式错误，请用 YYYY/MM/DD HH:MM:SS");
+        const utcDate = new Date(localDate.getTime() - timezone * 3600 * 1000);
+
+        // 初始化卫星
+        satrec = satellite.twoline2satrec(tle1, tle2);
+        if (satrec.error) throw new Error("TLE 解析失败: " + satrec.error);
+
+        // 过境预报（针对所有10个地面站）
+        allPasses = [];
+        const stationCount = 10;
+
+        for (let i = 1; i <= stationCount; i++) {
+          const lon = parseFloat(document.getElementById(`lon${i}`).value);
+          const lat = parseFloat(document.getElementById(`lat${i}`).value);
+          const obsGeod = {
+            longitude: satellite.radiansLong(lon),
+            latitude: satellite.radiansLat(lat),
+            height: 0
+          };
+
+          const passes = predictPasses(satrec, obsGeod, utcDate, 7, i, currentElThreshold);
+          allPasses.push(...passes);
+        }
+
+        // 生成 HTML 表格
+        let html = `<h3>📈 未来7天过境预报（仰角 > ${currentElThreshold.toFixed(1)}°）</h3>`;
+        if (allPasses.length === 0) {
+          html += `<p>未来7天无过境（仰角阈值: ${currentElThreshold.toFixed(1)}°）。</p>`;
+        } else {
+          // 添加排序表头
+          html += `
+          <table id="passTable">
+            <thead>
+              <tr>
+                <th>过境序号 <button class="sort-btn" onclick="sortTable(0)">↑↓</button></th>
+                <th>开始时间 (当地) <button class="sort-btn" onclick="sortTable(1)">↑↓</button></th>
+                <th>结束时间 (当地) <button class="sort-btn" onclick="sortTable(2)">↑↓</button></th>
+                <th>持续时间 <button class="sort-btn" onclick="sortTable(3)">↑↓</button></th>
+                <th>最高仰角 (°) <button class="sort-btn" onclick="sortTable(4)">↑↓</button></th>
+                <th>地球站序号 <button class="sort-btn" onclick="sortTable(5)">↑↓</button></th>
+              </tr>
+            </thead>
+            <tbody id="passTableBody">
+          `;
+
+          // 填充数据
+          allPasses.forEach((p, i) => {
+            const dur = (p.end - p.start) / 60000; // 分钟
+            html += `<tr>
+                       <td>${i+1}</td>
+                       <td>${p.start.toLocaleString()}</td>
+                       <td>${p.end.toLocaleString()}</td>
+                       <td>${dur.toFixed(1)} 分钟</td>
+                       <td>${p.maxElDeg.toFixed(2)}</td>
+                       <td>${p.stationId}</td>
+                     </tr>`;
+          });
+
+          html += `</tbody></table>`;
+        }
+
+        document.getElementById('passResult').innerHTML = html;
+        window._lastResult = { allPasses };
+    document.getElementById('selectedPassIndex').value = "1";
+  // 如果有至少一个过境记录，自动填充地球站信息
+    if (allPasses.length > 0) {
+      autoFillStation();
+    }
+
+      } catch (e) {
+        alert("❌ 计算出错：" + e.message);
+        console.error(e);
+        document.getElementById('debug').textContent = e.stack;
+        document.getElementById('debug').style.display = 'block';
+      }
+    }
+
+    // 排序函数
+    function sortTable(columnIndex) {
+      const table = document.getElementById('passTable');
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+
+      // 确定排序方向
+      if (sortColumn === columnIndex) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = columnIndex;
+        sortDirection = 'asc';
+      }
+
+      // 根据列索引和方向排序
+      rows.sort((a, b) => {
+        let aValue = a.cells[columnIndex].innerText;
+        let bValue = b.cells[columnIndex].innerText;
+
+        // 特殊处理：如果列是数字或日期，则转换类型
+        if (columnIndex === 0 || columnIndex === 3 || columnIndex === 4 || columnIndex === 5) {
+          // 数字列
+          aValue = parseFloat(aValue.replace(/[^\d.-]/g, ''));
+          bValue = parseFloat(bValue.replace(/[^\d.-]/g, ''));
+        } else if (columnIndex === 1 || columnIndex === 2) {
+          // 日期列
+          aValue = new Date(aValue.replace(/\//g, '-')).getTime();
+          bValue = new Date(bValue.replace(/\//g, '-')).getTime();
+        }
+
+        // 比较
+        let comparison = 0;
+        if (aValue < bValue) {
+          comparison = -1;
+        } else if (aValue > bValue) {
+          comparison = 1;
+        }
+
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+
+      // 重新插入行
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    // 过境预测（每分钟扫描），返回最高仰角 & 地球站序号
+    function predictPasses(satrec, obsGeod, startTime, days, stationId, elThreshold) {
+      const passes = [];
+      let current = new Date(startTime);
+      const end = new Date(startTime.getTime() + days * 24 * 3600 * 1000);
+      let inPass = false;
+      let passStart;
+      let maxElDeg = 0;
+
+      while (current < end) {
+        const posVel = satellite.propagate(satrec, current);
+        if (posVel.position) {
+          const gmst = satellite.gstime(current);
+          const posEcf = satellite.eciToEcf(posVel.position, gmst);
+          const look = satellite.ecfToLookAngles(obsGeod, posEcf);
+          const elDeg = satellite.radiansToDegrees(look.elevation);
+
+          // 使用动态仰角阈值
+          if (elDeg > elThreshold && !inPass) {
+            inPass = true;
+            passStart = new Date(current);
+            maxElDeg = elDeg;
+          } else if (elDeg <= elThreshold && inPass) {
+            inPass = false;
+            passes.push({
+              start: passStart,
+              end: new Date(current),
+              maxElDeg: maxElDeg,
+              stationId: stationId
+            });
+          } else if (inPass && elDeg > maxElDeg) {
+            maxElDeg = elDeg;
+          }
+        }
+        current.setMinutes(current.getMinutes() + 1);
+      }
+      
+      // 处理最后一段过境
+      if (inPass) {
+        passes.push({
+          start: passStart,
+          end: new Date(end),
+          maxElDeg: maxElDeg,
+          stationId: stationId
+        });
+      }
+      
+      return passes;
+    }
+
+    // 导出第一部分过境表
+    function exportToCSV() {
+      if (!window._lastResult || !window._lastResult.allPasses) {
+        alert("请先点击「开始计算过境」");
+        return;
+      }
+      const { allPasses } = window._lastResult;
+
+      // 生成 CSV 内容
+      let csv = `仰角阈值(°),${currentElThreshold.toFixed(1)}\n`;
+      csv += "过境序号,开始时间(UTC),结束时间(UTC),持续时间(分钟),最高仰角(°),地球站序号\n";
+
+      allPasses.forEach((p, i) => {
+        const dur = (p.end - p.start) / 60000; // 分钟
+        const startUTC = p.start.toISOString();
+        const endUTC = p.end.toISOString();
+        csv += `${i+1},"${startUTC}","${endUTC}",${dur.toFixed(1)},${p.maxElDeg.toFixed(2)},${p.stationId}\n`;
+      });
+
+      // 添加BOM确保Excel正确识别UTF-8
+      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+      const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8;' });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Passes_${currentElThreshold.toFixed(1)}deg_${new Date().toISOString().slice(0,16).replace(/:/g,'')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    }
+
+// 第二部分：计算卫星坐标与多普勒
+function calculateDoppler() {
+  try {
+    // 获取用户输入
+    const selectedPassIndex = parseInt(document.getElementById('selectedPassIndex').value) - 1; // 转为数组索引
+    const selectedStationId = parseInt(document.getElementById('selectedStationId').value);
+    const selectedLon = parseFloat(document.getElementById('selectedLon').value);
+    const selectedLat = parseFloat(document.getElementById('selectedLat').value);
+    const txFreq = parseFloat(document.getElementById('txFreq').value);
+    const rxFreq = parseFloat(document.getElementById('rxFreq').value);
+
+    // 验证输入
+    if (selectedPassIndex < 0 || selectedPassIndex >= allPasses.length) {
+      throw new Error("请选择有效的过境序号");
+    }
+    if (selectedStationId < 1 || selectedStationId > 10) {
+      throw new Error("地球站序号必须在 1-10 之间");
+    }
+
+    // 获取选中的过境记录
+    const selectedPass = allPasses[selectedPassIndex];
+
+    // 创建地面站地理坐标对象
+    const obsGeod = {
+      longitude: satellite.radiansLong(selectedLon),
+      latitude: satellite.radiansLat(selectedLat),
+      height: 0
+    };
+
+    // 生成时间点列表：开始、结束、最大仰角、以及中间每隔1秒
+    const timePoints = [];
+    const startTime = selectedPass.start;
+    const endTime = selectedPass.end;
+    const durationMs = endTime.getTime() - startTime.getTime();
+
+    // 添加开始时间
+    timePoints.push({ time: new Date(startTime), label: "开始时间（当地）" });
+
+    // 添加结束时间
+    timePoints.push({ time: new Date(endTime), label: "结束时间（当地）" });
+
+    // 添加最大仰角时间（需计算）
+    let maxElTimePoint = { time: new Date(startTime), label: "最大仰角时间", maxEl: 0 };
+    let current = new Date(startTime);
+    while (current <= endTime) {
+      const posVel = satellite.propagate(satrec, current);
+      if (posVel.position) {
+        const gmst = satellite.gstime(current);
+        const posEcf = satellite.eciToEcf(posVel.position, gmst);
+        const look = satellite.ecfToLookAngles(obsGeod, posEcf);
+        const elDeg = satellite.radiansToDegrees(look.elevation);
+        if (elDeg > maxElTimePoint.maxEl) {
+          maxElTimePoint.time = new Date(current);
+          maxElTimePoint.maxEl = elDeg;
+        }
+      }
+      current.setSeconds(current.getSeconds() + 1);
+    }
+    timePoints.push(maxElTimePoint);
+
+    // 添加中间时间点（每隔1秒）
+    current = new Date(startTime);
+    while (current < endTime) {
+      current.setSeconds(current.getSeconds() + 1);
+      if (current < endTime) {
+        timePoints.push({ time: new Date(current), label: `开始时间+${Math.floor((current.getTime() - startTime.getTime()) / 1000)}秒` });
+      }
+    }
+
+    // 对时间点按时间排序
+    timePoints.sort((a, b) => a.time - b.time);
+
+    // 计算每个时间点的数据
+    const dopplerData = [];
+    const c = 299792.458; // km/s
+    const timezoneOffset = parseFloat(document.getElementById('timezone').value);
+
+    for (const point of timePoints) {
+      const time = point.time;
+      const posVel = satellite.propagate(satrec, time);
+      if (!posVel.position) continue;
+
+      const gmst = satellite.gstime(time);
+      const posEcf = satellite.eciToEcf(posVel.position, gmst);
+      const velEcf = satellite.eciToEcf(posVel.velocity, gmst, time.getTime()/1000);
+
+      // 计算星下点
+      const geod = satellite.eciToGeodetic(posVel.position, gmst);
+      const subSatLon = satellite.degreesLong(geod.longitude);
+      const subSatLat = satellite.degreesLat(geod.latitude);
+      const height = geod.height;
+
+      // 计算距离、距离变化率
+      const obsEcf = satellite.geodeticToEcf(obsGeod);
+      const dx = posEcf.x - obsEcf.x;
+      const dy = posEcf.y - obsEcf.y;
+      const dz = posEcf.z - obsEcf.z;
+      const range = Math.sqrt(dx*dx + dy*dy + dz*dz); // km
+      const rangeRate = (dx*velEcf.x + dy*velEcf.y + dz*velEcf.z) / range; // km/s
+
+      // 多普勒频偏
+      const dopplerTx = -(rangeRate / c) * txFreq * 1e6;
+      const dopplerRx = -(rangeRate / c) * rxFreq * 1e6;
+
+      // 简化多普勒变化率（差分法，1秒步长）
+      const dt = 1.0; // sec
+      const nextDate = new Date(time.getTime() + dt * 1000);
+      const nextPosVel = satellite.propagate(satrec, nextDate);
+      if (nextPosVel.position) {
+        const nextGmst = satellite.gstime(nextDate);
+        const nextVelEcf = satellite.eciToEcf(nextPosVel.velocity, nextGmst);
+        const nextPosEcf = satellite.eciToEcf(nextPosVel.position, nextGmst);
+        const nextDx = nextPosEcf.x - obsEcf.x;
+        const nextDy = nextPosEcf.y - obsEcf.y;
+        const nextDz = nextPosEcf.z - obsEcf.z;
+        const nextRange = Math.sqrt(nextDx * nextDx + nextDy * nextDy + nextDz * nextDz);
+        const nextRangeRate = (nextDx * nextVelEcf.x + nextDy * nextVelEcf.y + nextDz * nextVelEcf.z) / nextRange;
+        const rangeRateAcc = (nextRangeRate - rangeRate) / dt; // km/s²
+        const dopplerRateTx = -(rangeRateAcc / c) * txFreq * 1e6;
+        const dopplerRateRx = -(rangeRateAcc / c) * rxFreq * 1e6;
+        
+        // 计算仰角和方位角 (正北为0°，正东为90°)
+        const lookAngles = satellite.ecfToLookAngles(obsGeod, posEcf);
+        const elevation = satellite.radiansToDegrees(lookAngles.elevation);
+        
+        // 修正方位角：正北为0°，正东为90°
+        let azimuth = satellite.radiansToDegrees(lookAngles.azimuth);
+        // satellite.js返回的方位角是正北为0°，顺时针增加
+        // 所以不需要额外转换，直接标准化到0-360度范围
+        azimuth = azimuth % 360;
+        if (azimuth < 0) azimuth += 360;
+        
+        dopplerData.push({
+          timeLabel: point.label,
+          time: time,
+          utcTime: new Date(time.getTime() - timezoneOffset * 3600 * 1000), // UTC时间
+          subSatLon: subSatLon,
+          subSatLat: subSatLat,
+          height: height,
+          dopplerTx: dopplerTx,
+          dopplerRateTx: dopplerRateTx,
+          dopplerRx: dopplerRx,
+          dopplerRateRx: dopplerRateRx,
+          elevation: elevation,
+          azimuth: azimuth, // 修正后的方位角
+          distance: range,
+          delay: (range / c) * 1000
+        });
+      } else {
+        // 计算仰角和方位角 (失败情况)
+        const lookAngles = satellite.ecfToLookAngles(obsGeod, posEcf);
+        const elevation = satellite.radiansToDegrees(lookAngles.elevation);
+        
+        // 修正方位角
+        let azimuth = satellite.radiansToDegrees(lookAngles.azimuth);
+        azimuth = azimuth % 360;
+        if (azimuth < 0) azimuth += 360;
+        
+        dopplerData.push({
+          timeLabel: point.label,
+          time: time,
+          utcTime: new Date(time.getTime() - timezoneOffset * 3600 * 1000), // UTC时间
+          subSatLon: subSatLon,
+          subSatLat: subSatLat,
+          height: height,
+          dopplerTx: dopplerTx,
+          dopplerRateTx: 0,
+          dopplerRx: dopplerRx,
+          dopplerRateRx: 0,
+          elevation: elevation,
+          azimuth: azimuth, // 修正后的方位角
+          distance: range,
+          delay: (range / c) * 1000
+        });
+      }
+    }
+
+    // 过滤掉仰角低于阈值的行
+    const filteredData = dopplerData.filter(data => data.elevation >= currentElThreshold);
+    
+    // 如果过滤后为空，显示提示
+    if (filteredData.length === 0) {
+      document.getElementById('dopplerResult').innerHTML = 
+        `<div class="filter-note">⚠️ 未找到仰角 ≥ ${currentElThreshold.toFixed(1)}° 的数据点</div>`;
+      return;
+    }
+
+    // 生成 HTML 表格
+    let html = `<h3>📡 过境卫星坐标与多普勒表格（仰角阈值: ${currentElThreshold.toFixed(1)}°）</h3>`;
+    html += `<div class="filter-note">显示了 ${filteredData.length} 个符合条件的数据点（总计算点: ${dopplerData.length}）</div>`;
+    html += `<table>
+      <tr>
+        <th>序号</th>
+        <th>时间 (当地)</th>
+        <th>UTC时间</th> <!-- 新增UTC时间列 -->
+        <th>星地距离 (km)</th>
+        <th>星下点经度</th>
+        <th>星下点纬度</th>
+        <th>距地面高度（km）</th>
+        <th>仰角</th> <!-- 移到高度列之后 -->
+        <th>方位</th> <!-- 移到高度列之后 -->
+        <th>发射频偏</th>
+        <th>发射频率变化率</th>
+        <th>接收频偏</th>
+        <th>接收频率变化率</th>
+        <th>传输时长 (ms)</th> <!-- 移到最后 -->
+      </tr>`;
+
+    // 添加过滤后的数据
+    filteredData.forEach((data, i) => {
+      const localTimeStr = data.time.toLocaleString('zh-CN', { 
+        year: 'numeric', month: '2-digit', day: '2-digit', 
+        hour: '2-digit', minute: '2-digit', second: '2-digit' 
+      }).replace(/-/g, '/');
+      
+      // 格式化UTC时间
+      const utcTimeStr = data.utcTime.toISOString().replace('T', ' ').substring(0, 19);
+      
+      html += `<tr>
+                 <td>${i+1}</td>
+                 <td>${localTimeStr}</td>
+                 <td>${utcTimeStr}</td> <!-- UTC时间 -->
+                 <td>${data.distance.toFixed(2)}</td>
+                 <td>${data.subSatLon.toFixed(4)}</td>
+                 <td>${data.subSatLat.toFixed(4)}</td>
+                 <td>${data.height.toFixed(2)}</td>
+                 <td>${data.elevation.toFixed(2)}</td> <!-- 仰角移到这里 -->
+                 <td>${data.azimuth.toFixed(2)}</td> <!-- 方位移到这里 -->
+                 <td>${data.dopplerTx.toFixed(1)}</td>
+                 <td>${data.dopplerRateTx.toFixed(3)}</td>
+                 <td>${data.dopplerRx.toFixed(1)}</td>
+                 <td>${data.dopplerRateRx.toFixed(3)}</td>
+                 <td>${data.delay.toFixed(2)}</td> <!-- 传输时长移到最后 -->
+               </tr>`;
+    });
+
+    html += `</table>`;
+
+    document.getElementById('dopplerResult').innerHTML = html;
+    window._dopplerResult = { 
+      dopplerData: filteredData,
+      originalCount: dopplerData.length,
+      filteredCount: filteredData.length
+    };
+
+  } catch (e) {
+    alert("❌ 计算出错：" + e.message);
+    console.error(e);
+    document.getElementById('debug').textContent = e.stack;
+    document.getElementById('debug').style.display = 'block';
+  }
+}
+
+// 导出第二部分多普勒表
+function exportDopplerToCSV() {
+  if (!window._dopplerResult || !window._dopplerResult.dopplerData) {
+    alert("请先点击「开始计算卫星坐标与多普勒」");
+    return;
+  }
+  
+  const { dopplerData, originalCount, filteredCount } = window._dopplerResult;
+  const timezoneOffset = parseFloat(document.getElementById('timezone').value);
+
+  // 生成 CSV 内容
+  let csv = `仰角阈值(°),${currentElThreshold.toFixed(1)}\n`;
+  csv += `过滤信息,显示了 ${filteredCount} 个符合条件的数据点（总计算点: ${originalCount}）\n`;
+  // 列顺序修改
+  csv += "序号,时间 (当地),UTC时间,星地距离 (km),星下点经度,星下点纬度,距地面高度（km）,仰角,方位,发射频偏,发射频率变化率,接收频偏,接收频率变化率,传输时长 (ms)\n";
+
+  dopplerData.forEach((data, i) => {
+    // 格式化时间为 "YYYY/MM/DD HH:MM:SS"
+    const localTimeStr = data.time.toLocaleString('zh-CN', { 
+      year: 'numeric', month: '2-digit', day: '2-digit', 
+      hour: '2-digit', minute: '2-digit', second: '2-digit' 
+    }).replace(/-/g, '/');
+    
+    // 格式化UTC时间
+    const utcTimeStr = data.utcTime.toISOString().replace('T', ' ').substring(0, 19);
+    
+    // 列顺序调整
+    csv += `${i+1},"${localTimeStr}","${utcTimeStr}",${data.distance.toFixed(2)},${data.subSatLon.toFixed(4)},${data.subSatLat.toFixed(4)},${data.height.toFixed(2)},${data.elevation.toFixed(2)},${data.azimuth.toFixed(2)},${data.dopplerTx.toFixed(1)},${data.dopplerRateTx.toFixed(3)},${data.dopplerRx.toFixed(1)},${data.dopplerRateRx.toFixed(3)},${data.delay.toFixed(2)}\n`;
+  });
+
+  // 添加 BOM
+  const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+  const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8;' });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Doppler_${currentElThreshold.toFixed(1)}deg_${new Date().toISOString().slice(0,16).replace(/:/g,'')}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+</script></body>
+</html>
